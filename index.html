@@ -1,0 +1,1167 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>特級廚師：多蛋大作戰與火力大考驗 | Egg Frying Simulator</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts & Font Awesome -->
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Canvas Confetti Library -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background-color: #1a0f0a;
+      touch-action: manipulation;
+      overflow-x: hidden;
+    }
+
+    .font-fredoka {
+      font-family: 'Fredoka One', cursive;
+    }
+
+    /* 平底鍋木質與磚牆背景 */
+    .kitchen-bg {
+      background: radial-gradient(circle at 50% 20%, #f59e0b 0%, #78350f 50%, #1a0f0a 100%);
+    }
+
+    /* 平底鍋視覺設計 */
+    .frying-pan {
+      background: radial-gradient(circle at 40% 40%, #374151 0%, #111827 75%, #030712 100%);
+      box-shadow: 
+        inset 0 10px 25px rgba(255, 255, 255, 0.15),
+        inset 0 -20px 35px rgba(0, 0, 0, 0.85),
+        0 25px 45px rgba(0, 0, 0, 0.8);
+      border: 14px solid #1f2937;
+      transform-style: preserve-3d;
+      perspective: 1000px;
+    }
+
+    /* 火焰樣式 */
+    .flame-low {
+      background: linear-gradient(to top, #1d4ed8 20%, #60a5fa 70%, #ffffff 100%);
+    }
+    .flame-med {
+      background: linear-gradient(to top, #3b82f6 10%, #ef4444 60%, #fbbf24 100%);
+    }
+    .flame-high {
+      background: linear-gradient(to top, #dc2626 10%, #f97316 50%, #fef08a 100%);
+      filter: drop-shadow(0 0 8px #f97316);
+    }
+
+    .flame-particle {
+      width: 16px;
+      height: 32px;
+      border-radius: 50% 50% 20% 20%;
+      animation: flicker 0.12s infinite alternate ease-in-out;
+    }
+
+    @keyframes flicker {
+      0% { transform: scaleY(1) scaleX(1); opacity: 0.85; }
+      100% { transform: scaleY(1.35) scaleX(0.8); opacity: 1; }
+    }
+
+    /* 蛋體 3D 容器 */
+    .egg-element {
+      position: absolute;
+      transform-style: preserve-3d;
+      perspective: 800px;
+      transition: opacity 0.2s ease;
+      cursor: pointer;
+    }
+
+    .egg-body {
+      transition: transform 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      transform-style: preserve-3d;
+    }
+
+    .egg-side {
+      backface-visibility: hidden;
+      border-radius: 40% 60% 70% 30% / 50% 60% 40% 50%;
+    }
+
+    .egg-side-back {
+      transform: rotateY(180deg);
+    }
+
+    /* 滋滋氣泡與煙霧粒子 */
+    .sizzle-bubble {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 50%;
+      pointer-events: none;
+      animation: bubbleUp 0.45s ease-out forwards;
+    }
+
+    @keyframes bubbleUp {
+      0% { transform: scale(0.2); opacity: 0.9; }
+      100% { transform: scale(1.6); opacity: 0; }
+    }
+
+    .smoke-particle {
+      position: absolute;
+      background: radial-gradient(circle, rgba(160,160,160,0.85) 0%, rgba(30,30,30,0) 70%);
+      border-radius: 50%;
+      pointer-events: none;
+      animation: smokeRise 1.1s ease-out forwards;
+    }
+
+    @keyframes smokeRise {
+      0% { transform: translateY(0) scale(0.5); opacity: 0.8; }
+      100% { transform: translateY(-80px) scale(2.6); opacity: 0; }
+    }
+
+    /* 鏟子跟隨指示器 */
+    #spatulaCursor {
+      position: fixed;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      z-index: 9999;
+      transform-origin: 20% 20%;
+      transition: opacity 0.2s ease;
+      filter: drop-shadow(4px 10px 8px rgba(0,0,0,0.6));
+      opacity: 0;
+    }
+
+    .btn-push {
+      transition: all 0.1s ease;
+      cursor: pointer;
+    }
+    .btn-push:active {
+      transform: translateY(3px);
+      box-shadow: none !important;
+    }
+
+    /* 甩鍋拋起動畫 */
+    @keyframes panTossAnim {
+      0% { transform: translateY(0) rotate(0deg); }
+      30% { transform: translateY(-38px) rotate(-3deg) scale(1.02); }
+      60% { transform: translateY(12px) rotate(2deg); }
+      100% { transform: translateY(0) rotate(0deg); }
+    }
+    .pan-tossing {
+      animation: panTossAnim 0.5s cubic-bezier(0.25, 1, 0.5, 1);
+    }
+  </style>
+</head>
+<body class="min-h-screen text-slate-100 flex flex-col justify-between kitchen-bg select-none cursor-default">
+
+  <!-- 平底鍋鏟 (跟隨滑鼠/觸控指示) -->
+  <div id="spatulaCursor" class="w-16 h-28 flex flex-col items-center">
+    <div class="w-12 h-14 bg-gradient-to-b from-slate-300 via-slate-400 to-slate-200 rounded-t-lg border-2 border-slate-500 shadow-inner relative flex justify-around px-1 pt-2">
+      <div class="w-1 h-8 bg-slate-600/40 rounded-full"></div>
+      <div class="w-1 h-8 bg-slate-600/40 rounded-full"></div>
+      <div class="w-1 h-8 bg-slate-600/40 rounded-full"></div>
+    </div>
+    <div class="w-3 h-4 bg-slate-600"></div>
+    <div class="w-4 h-12 bg-amber-800 rounded-b-md border border-amber-950 shadow"></div>
+  </div>
+
+  <!-- 頂部 HUD (狀態與分數) -->
+  <header class="w-full max-w-4xl mx-auto px-4 pt-3 relative z-30">
+  <!-- 頂部 HUD (狀態與分數) -->
+  <header class="w-full max-w-4xl mx-auto px-4 pt-3 relative z-10">
+    <div class="bg-amber-950/85 backdrop-blur-md text-amber-100 rounded-2xl p-3 sm:p-4 border-2 border-amber-600/40 shadow-2xl flex flex-wrap items-center justify-between gap-3">
+      
+      <!-- 標題 -->
+      <div class="flex items-center gap-3">
+        <div class="w-11 h-11 bg-amber-500 rounded-xl flex items-center justify-center text-2xl shadow-inner text-amber-950">
+          🍳
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-xl font-black tracking-wide text-amber-200">特級廚師：多蛋大作戰與火力大考驗</h1>
+          <p class="text-[11px] text-amber-400">Egg Frying Simulator: Multi-Egg Heat Master</p>
+        </div>
+      </div>
+
+      <!-- 分數統計 -->
+      <div class="flex items-center gap-3 sm:gap-6 bg-amber-900/60 px-3 py-1.5 rounded-xl border border-amber-700/50">
+        <div class="text-center">
+          <div class="text-[10px] text-amber-300 font-bold uppercase">目前分數</div>
+          <div id="scoreDisplay" class="text-xl sm:text-2xl font-black text-yellow-400 font-fredoka">0</div>
+        </div>
+
+        <div class="h-7 w-px bg-amber-700/60"></div>
+
+        <div class="text-center">
+          <div class="text-[10px] text-amber-300 font-bold uppercase">鍋內顆數</div>
+          <div id="eggCountDisplay" class="text-xl sm:text-2xl font-black text-amber-300 font-fredoka">0 / 5</div>
+        </div>
+
+        <div class="h-7 w-px bg-amber-700/60"></div>
+
+        <div class="text-center">
+          <div class="text-[10px] text-amber-300 font-bold uppercase">特級次數</div>
+          <div id="perfectCountDisplay" class="text-xl sm:text-2xl font-black text-emerald-400 font-fredoka">0</div>
+        </div>
+
+        <div class="h-7 w-px bg-amber-700/60"></div>
+
+        <div class="text-center">
+          <div class="text-[10px] text-amber-300 font-bold uppercase">Combo</div>
+          <div id="comboDisplay" class="text-xl sm:text-2xl font-black text-orange-400 font-fredoka">x0</div>
+        </div>
+      </div>
+
+      <!-- 功能按鈕 -->
+      <div class="flex items-center gap-2">
+        <button id="audioBtn" class="w-9 h-9 rounded-xl bg-amber-800 hover:bg-amber-700 border border-amber-600/50 flex items-center justify-center text-amber-200 transition">
+          <i id="audioIcon" class="fas fa-volume-up"></i>
+        </button>
+        <button id="resetBtn" class="w-9 h-9 rounded-xl bg-red-900/80 hover:bg-red-800 border border-red-600/50 flex items-center justify-center text-red-200 transition" title="重設遊戲">
+          <i class="fas fa-redo"></i>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- 主要互動區域 -->
+  <main class="w-full max-w-4xl mx-auto px-4 my-auto flex flex-col items-center justify-center relative">
+
+    <!-- 主平底鍋舞台 -->
+    <div class="relative flex items-center justify-center my-3">
+      
+      <!-- 鍋底影子 -->
+      <div class="absolute w-80 h-80 md:w-96 md:h-96 rounded-full bg-black/60 blur-xl translate-y-6"></div>
+
+      <!-- 鍋子主體 -->
+      <div id="pan" class="frying-pan w-80 h-80 md:w-96 md:h-96 rounded-full relative flex items-center justify-center overflow-hidden">
+        
+        <!-- 鍋內油光 -->
+        <div class="absolute inset-4 rounded-full bg-gradient-to-br from-white/10 to-transparent pointer-events-none"></div>
+
+        <!-- 冒煙與油氣粒子容器 -->
+        <div id="particleContainer" class="absolute inset-0 rounded-full overflow-hidden pointer-events-none z-20"></div>
+
+        <!-- 荷包蛋放置層 (多顆蛋動態生成區) -->
+        <div id="eggLayer" class="absolute inset-0 z-10 pointer-events-auto"></div>
+
+        <!-- 空鍋提示 -->
+        <div id="panPlaceholder" class="text-center text-slate-400 font-bold opacity-75 pointer-events-none z-0">
+          <i class="fas fa-utensils text-4xl mb-2 block text-amber-500"></i>
+          點擊【打蛋進鍋】最多可同時煎 5 顆蛋！<br>
+          <span class="text-xs font-normal text-slate-400">滑鼠推動蛋或點擊翻面，按 [Space] 甩鍋！</span>
+        </div>
+
+      </div>
+
+      <!-- 鍋柄 -->
+      <div class="absolute right-full top-1/2 -translate-y-1/2 w-28 md:w-36 h-9 bg-neutral-900 rounded-l-2xl border-y-2 border-l-2 border-neutral-700 shadow-2xl hidden sm:block">
+        <div class="w-6 h-3 bg-neutral-700 rounded-full mx-3 mt-3"></div>
+      </div>
+
+      <!-- 瓦斯爐火焰容器 -->
+      <div id="flameContainer" class="absolute -bottom-6 flex gap-3 opacity-0 transition-opacity duration-300 z-0">
+        <div class="flame-particle flame-med"></div>
+        <div class="flame-particle flame-med" style="animation-delay: 0.04s;"></div>
+        <div class="flame-particle flame-med" style="animation-delay: 0.08s;"></div>
+        <div class="flame-particle flame-med" style="animation-delay: 0.03s;"></div>
+        <div class="flame-particle flame-med" style="animation-delay: 0.07s;"></div>
+      </div>
+
+    </div>
+
+    <!-- 1. 火力調節切換器 (Heat Control) -->
+    <div class="w-full max-w-md bg-amber-950/80 backdrop-blur-md rounded-2xl p-2.5 mb-2 border border-amber-700/50 shadow-xl flex items-center justify-between gap-2 z-10">
+      <span class="text-xs font-bold text-amber-300 flex items-center gap-1.5 pl-2">
+        <i class="fas fa-fire text-orange-500"></i> 火力大小:
+      </span>
+
+      <div class="flex items-center gap-1.5 flex-1 justify-end">
+        <button id="heatLowBtn" class="heat-btn px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-600">
+          🔥 小火 (0.5x)
+        </button>
+        <button id="heatMedBtn" class="heat-btn px-3 py-1.5 rounded-xl text-xs font-bold transition bg-amber-600 text-amber-950 border border-amber-300 shadow">
+          🔥🔥 中火 (1.0x)
+        </button>
+        <button id="heatHighBtn" class="heat-btn px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-600">
+          💥 大火 (2.5x)
+        </button>
+      </div>
+    </div>
+
+    <!-- 評語與結果彈跳氣泡 -->
+    <div id="resultBanner" class="h-8 flex items-center justify-center opacity-0 transition-all duration-300 transform translate-y-2 z-10">
+      <div id="resultText" class="px-5 py-1 rounded-xl text-xs sm:text-sm font-black shadow-lg border"></div>
+    </div>
+
+    <!-- 操作控制按鈕區 -->
+    <div class="flex items-center gap-3 mt-2 w-full max-w-lg z-10">
+      <!-- 打蛋按鈕 -->
+      <button id="crackBtn" class="btn-push flex-1 bg-gradient-to-b from-amber-400 to-amber-600 hover:from-amber-300 hover:to-amber-500 text-amber-950 font-black py-3 px-3 rounded-2xl shadow-[0_5px_0_#92400e] border border-amber-300/40 flex flex-col items-center justify-center">
+        <span class="text-sm sm:text-base flex items-center gap-1.5">
+          <i class="fas fa-egg"></i> 打蛋進鍋
+        </span>
+        <span class="text-[10px] opacity-80 font-normal">連續點擊 (上限5顆)</span>
+      </button>
+
+      <!-- 甩鍋按鈕 -->
+      <button id="tossBtn" disabled class="btn-push flex-1 bg-gradient-to-b from-purple-500 to-indigo-700 hover:from-purple-400 hover:to-indigo-600 text-white font-black py-3 px-3 rounded-2xl shadow-[0_5px_0_#3730a3] border border-purple-300/30 flex flex-col items-center justify-center opacity-50 cursor-not-allowed">
+        <span class="text-sm sm:text-base flex items-center gap-1.5">
+          <i class="fas fa-wind"></i> 帥氣甩鍋
+        </span>
+        <span class="text-[10px] opacity-80 font-normal">[Space 空白鍵]</span>
+      </button>
+
+      <!-- 起鍋按鈕 -->
+      <button id="serveBtn" disabled class="btn-push flex-1 bg-gradient-to-b from-emerald-500 to-emerald-700 hover:from-emerald-400 hover:to-emerald-600 text-white font-black py-3 px-3 rounded-2xl shadow-[0_5px_0_#065f46] border border-emerald-300/30 flex flex-col items-center justify-center opacity-50 cursor-not-allowed">
+        <span class="text-sm sm:text-base flex items-center gap-1.5">
+          <i class="fas fa-concierge-bell"></i> 盛起對準蛋
+        </span>
+        <span class="text-[10px] opacity-80 font-normal">Serve Selected</span>
+      </button>
+    </div>
+
+  </main>
+
+  <!-- 底部：歷史紀錄成品盤 -->
+  <footer class="w-full max-w-4xl mx-auto px-4 pb-3 mt-2 relative z-10">
+    <div class="bg-amber-950/70 backdrop-blur-md rounded-2xl p-3 border border-amber-800/40">
+      <div class="flex justify-between items-center mb-1.5 px-2">
+        <span class="text-xs font-bold text-amber-300"><i class="fas fa-utensils mr-1"></i> 今日煎蛋展示盤 (Plate Tray)</span>
+        <span id="highScoreDisplay" class="text-xs text-amber-400 font-bold">最高分: 0</span>
+      </div>
+      <div id="eggPlateTray" class="flex items-center gap-2.5 overflow-x-auto p-1.5 min-h-[52px] rounded-xl bg-amber-900/40 border border-amber-900/60">
+        <span id="emptyPlateHint" class="text-xs text-amber-600 italic mx-auto">還沒有起鍋的荷包蛋喔，快打幾顆蛋試試！</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- 遊戲核心邏輯 JavaScript -->
+  <script>
+    // --- 1. Web Audio API 音效管理器 ---
+    class SoundManager {
+      constructor() {
+        this.ctx = null;
+        this.muted = false;
+        this.sizzleNode = null;
+        this.sizzleGain = null;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+        if (this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playCrack() {
+        if (this.muted) return;
+        this.init();
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(200, now);
+        osc.frequency.exponentialRampToValueAtTime(60, now + 0.08);
+
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.08);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.08);
+      }
+
+      playSpatulaClink() {
+        if (this.muted) return;
+        this.init();
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(750, now);
+        osc.frequency.exponentialRampToValueAtTime(280, now + 0.05);
+
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.05);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.05);
+      }
+
+      playFlipSwoosh() {
+        if (this.muted) return;
+        this.init();
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(650, now + 0.12);
+        osc.frequency.exponentialRampToValueAtTime(160, now + 0.22);
+
+        gain.gain.setValueAtTime(0.01, now);
+        gain.gain.linearRampToValueAtTime(0.25, now + 0.12);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.22);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.22);
+      }
+
+      playPanTossSound() {
+        if (this.muted) return;
+        this.init();
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(110, now);
+        osc.frequency.exponentialRampToValueAtTime(280, now + 0.2);
+        osc.frequency.exponentialRampToValueAtTime(70, now + 0.45);
+
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.45);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.45);
+      }
+
+      startSizzle() {
+        if (this.muted) return;
+        this.init();
+        if (this.sizzleNode) return;
+
+        const bufferSize = this.ctx.sampleRate * 2;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const output = buffer.getChannelData(0);
+        let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          b0 = 0.99886 * b0 + white * 0.0555179;
+          b1 = 0.99332 * b1 + white * 0.0750759;
+          b2 = 0.96900 * b2 + white * 0.1538520;
+          b3 = 0.86650 * b3 + white * 0.3104856;
+          b4 = 0.55000 * b4 + white * 0.5329522;
+          b5 = -0.7616 * b5 - white * 0.0168980;
+          output[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+          output[i] *= 0.12;
+          b6 = white * 0.115926;
+        }
+
+        this.sizzleNode = this.ctx.createBufferSource();
+        this.sizzleNode.buffer = buffer;
+        this.sizzleNode.loop = true;
+
+        this.sizzleGain = this.ctx.createGain();
+        this.sizzleGain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+
+        this.sizzleNode.connect(this.sizzleGain);
+        this.sizzleGain.connect(this.ctx.destination);
+        this.sizzleNode.start();
+      }
+
+      stopSizzle() {
+        if (this.sizzleNode) {
+          try {
+            this.sizzleGain.gain.linearRampToValueAtTime(0.001, this.ctx.currentTime + 0.1);
+            setTimeout(() => {
+              if (this.sizzleNode) {
+                this.sizzleNode.stop();
+                this.sizzleNode.disconnect();
+                this.sizzleNode = null;
+              }
+            }, 100);
+          } catch(e) {}
+        }
+      }
+
+      playFanfare(isSuperChef) {
+        if (this.muted) return;
+        this.init();
+        const now = this.ctx.currentTime;
+        const freqs = isSuperChef 
+          ? [523.25, 659.25, 783.99, 1046.50]
+          : [330, 392, 523.25];
+
+        freqs.forEach((f, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(f, now + idx * 0.07);
+
+          gain.gain.setValueAtTime(0.22, now + idx * 0.07);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.35);
+
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+
+          osc.start(now + idx * 0.07);
+          osc.stop(now + idx * 0.07 + 0.35);
+        });
+      }
+
+      playBurnSound() {
+        if (this.muted) return;
+        this.init();
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(140, now);
+        osc.frequency.linearRampToValueAtTime(65, now + 0.3);
+
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.linearRampToValueAtTime(0.01, now + 0.3);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.3);
+      }
+    }
+
+    const sound = new SoundManager();
+
+    // --- 2. 全局遊戲狀態控制 ---
+    const MAX_EGGS = 5;
+    let eggsList = [];
+    let nextEggId = 1;
+    let heatMultiplier = 1.0;
+    let lastTime = 0;
+    let isTossingAll = false;
+    let particleInterval = null;
+
+    let mouseX = window.innerWidth / 2;
+    let mouseY = window.innerHeight / 2;
+
+    let score = 0;
+    let perfectCount = 0;
+    let combo = 0;
+    let highScore = localStorage.getItem('egg_multimaster_highscore') || 0;
+
+    const HEAT_PERFECT_MIN = 35;
+    const HEAT_PERFECT_MAX = 75;
+    const HEAT_WELL_DONE = 95;
+
+    const spatulaCursor = document.getElementById('spatulaCursor');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const eggCountDisplay = document.getElementById('eggCountDisplay');
+    const perfectCountDisplay = document.getElementById('perfectCountDisplay');
+    const comboDisplay = document.getElementById('comboDisplay');
+    const highScoreDisplay = document.getElementById('highScoreDisplay');
+
+    const crackBtn = document.getElementById('crackBtn');
+    const tossBtn = document.getElementById('tossBtn');
+    const serveBtn = document.getElementById('serveBtn');
+    const resetBtn = document.getElementById('resetBtn');
+    const audioBtn = document.getElementById('audioBtn');
+    const audioIcon = document.getElementById('audioIcon');
+
+    const heatLowBtn = document.getElementById('heatLowBtn');
+    const heatMedBtn = document.getElementById('heatMedBtn');
+    const heatHighBtn = document.getElementById('heatHighBtn');
+
+    const pan = document.getElementById('pan');
+    const eggLayer = document.getElementById('eggLayer');
+    const panPlaceholder = document.getElementById('panPlaceholder');
+    const flameContainer = document.getElementById('flameContainer');
+    const particleContainer = document.getElementById('particleContainer');
+
+    const resultBanner = document.getElementById('resultBanner');
+    const resultText = document.getElementById('resultText');
+    const eggPlateTray = document.getElementById('eggPlateTray');
+    const emptyPlateHint = document.getElementById('emptyPlateHint');
+
+    highScoreDisplay.innerText = `最高分: ${highScore}`;
+
+    // --- 3. 獨立 Egg 類別 ---
+    class Egg {
+      constructor(id, x, y) {
+        this.id = id;
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 40;
+        this.vy = (Math.random() - 0.5) * 40;
+
+        this.heatA = 0;
+        this.heatB = 0;
+        this.facing = 'A';
+        this.isFlipping = false;
+
+        this.createElement();
+      }
+
+      createElement() {
+        this.el = document.createElement('div');
+        this.el.className = 'egg-element w-32 h-28 sm:w-36 sm:h-32 flex flex-col items-center justify-center z-20';
+        
+        this.el.innerHTML = `
+          <div class="absolute -top-5 z-30 bg-black/85 backdrop-blur-sm px-2 py-0.5 rounded-full border border-amber-600/60 shadow flex items-center gap-1.5 text-[9px]">
+            <div class="flex items-center gap-0.5">
+              <span class="text-amber-200 font-bold">A:</span>
+              <div class="w-8 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div class="mini-bar-a h-full bg-blue-400 w-0 transition-all duration-75"></div>
+              </div>
+            </div>
+            <div class="flex items-center gap-0.5">
+              <span class="text-purple-200 font-bold">B:</span>
+              <div class="w-8 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div class="mini-bar-b h-full bg-blue-400 w-0 transition-all duration-75"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="egg-shadow-elm absolute inset-2 bg-black/35 rounded-full blur-sm translate-y-3 pointer-events-none"></div>
+
+          <div class="egg-body-elm egg-body w-full h-full relative">
+            <div class="egg-side-a egg-side absolute inset-0 bg-white/40 border-2 border-white/30 flex items-center justify-center shadow-inner">
+              <div class="egg-yolk-a w-14 h-14 bg-amber-400 rounded-full shadow-md relative flex items-center justify-center transform -translate-y-1 -translate-x-1 border border-amber-300/60">
+                <div class="w-3.5 h-2 bg-white/70 rounded-full absolute top-2 left-2.5 transform -rotate-45"></div>
+              </div>
+            </div>
+
+            <div class="egg-side-b egg-side egg-side-back absolute inset-0 bg-white/40 border-2 border-white/30 flex items-center justify-center shadow-inner">
+              <div class="egg-yolk-b w-16 h-16 bg-amber-500/80 rounded-full blur-[1px] transform scale-90 border border-amber-400/40"></div>
+            </div>
+          </div>
+        `;
+
+        eggLayer.appendChild(this.el);
+
+        this.miniBarA = this.el.querySelector('.mini-bar-a');
+        this.miniBarB = this.el.querySelector('.mini-bar-b');
+        this.eggBody = this.el.querySelector('.egg-body-elm');
+        this.eggShadow = this.el.querySelector('.egg-shadow-elm');
+        this.eggSideA = this.el.querySelector('.egg-side-a');
+        this.eggSideB = this.el.querySelector('.egg-side-b');
+        this.eggYolkA = this.el.querySelector('.egg-yolk-a');
+        this.eggYolkB = this.el.querySelector('.egg-yolk-b');
+
+        this.el.addEventListener('pointerdown', (e) => {
+          e.stopPropagation();
+          this.flip();
+        });
+      }
+
+      update(dt) {
+        if (!this.isFlipping && !isTossingAll) {
+          const rate = 16.0 * heatMultiplier * dt;
+          if (this.facing === 'A') {
+            this.heatA = Math.min(this.heatA + rate, 100);
+          } else {
+            this.heatB = Math.min(this.heatB + rate, 100);
+          }
+        }
+
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+        this.vx *= 0.88;
+        this.vy *= 0.88;
+
+        const maxR = 90;
+        const dist = Math.hypot(this.x, this.y);
+        if (dist > maxR) {
+          const angle = Math.atan2(this.y, this.x);
+          this.x = Math.cos(angle) * maxR;
+          this.y = Math.sin(angle) * maxR;
+          this.vx *= -0.4;
+          this.vy *= -0.4;
+        }
+
+        const centerPan = pan.getBoundingClientRect().width / 2 - 70;
+        this.el.style.transform = `translate3d(${centerPan + this.x}px, ${centerPan + this.y}px, 0)`;
+
+        this.updateVisuals();
+      }
+
+      flip() {
+        if (this.isFlipping || isTossingAll) return;
+        this.isFlipping = true;
+        sound.playFlipSwoosh();
+
+        this.facing = this.facing === 'A' ? 'B' : 'A';
+        const targetDeg = this.facing === 'B' ? 180 : 0;
+
+        this.eggBody.style.transform = `translateY(-25px) scale(1.1) rotateY(${targetDeg}deg)`;
+        this.eggShadow.style.transform = 'scale(0.7) translateY(15px)';
+
+        setTimeout(() => {
+          this.eggBody.style.transform = `translateY(0px) scale(1) rotateY(${targetDeg}deg)`;
+          this.eggShadow.style.transform = 'scale(1) translateY(8px)';
+          this.isFlipping = false;
+        }, 320);
+      }
+
+      tossInAir() {
+        this.facing = this.facing === 'A' ? 'B' : 'A';
+        const targetDeg = this.facing === 'B' ? 180 : 0;
+
+        this.eggBody.style.transform = `translateY(-90px) scale(1.25) rotateY(${targetDeg + 360}deg)`;
+        this.eggShadow.style.transform = 'scale(0.3) translateY(35px)';
+        this.eggShadow.style.opacity = '0.3';
+
+        setTimeout(() => {
+          this.eggBody.style.transform = `translateY(0px) scale(1) rotateY(${targetDeg}deg)`;
+          this.eggShadow.style.transform = 'scale(1) translateY(8px)';
+          this.eggShadow.style.opacity = '1';
+        }, 480);
+      }
+
+      updateVisuals() {
+        this.miniBarA.style.width = `${this.heatA}%`;
+        this.miniBarA.className = `mini-bar-a h-full ${getBarColor(this.heatA)}`;
+
+        this.miniBarB.style.width = `${this.heatB}%`;
+        this.miniBarB.className = `mini-bar-b h-full ${getBarColor(this.heatB)}`;
+
+        applyColorToSide(this.eggSideA, this.eggYolkA, this.heatA, true);
+        applyColorToSide(this.eggSideB, this.eggYolkB, this.heatB, false);
+      }
+
+      destroy() {
+        this.el.remove();
+      }
+    }
+
+    function getBarColor(heat) {
+      if (heat < HEAT_PERFECT_MIN) return 'bg-blue-400';
+      if (heat <= HEAT_PERFECT_MAX) return 'bg-emerald-400';
+      if (heat <= HEAT_WELL_DONE) return 'bg-amber-400';
+      return 'bg-red-600';
+    }
+
+    function applyColorToSide(sideEl, yolkEl, heat, isSideA) {
+      if (heat < HEAT_PERFECT_MIN) {
+        sideEl.style.background = 'rgba(255, 255, 255, 0.45)';
+        sideEl.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+        if (isSideA) yolkEl.style.background = '#f59e0b';
+      } else if (heat <= HEAT_PERFECT_MAX) {
+        sideEl.style.background = 'rgba(255, 255, 255, 0.95)';
+        sideEl.style.borderColor = '#fef3c7';
+        sideEl.style.boxShadow = '0 0 12px rgba(252, 211, 77, 0.5)';
+        if (isSideA) yolkEl.style.background = 'radial-gradient(circle at 35% 35%, #fbbf24 0%, #f59e0b 70%, #d97706 100%)';
+      } else if (heat <= HEAT_WELL_DONE) {
+        sideEl.style.background = '#fef3c7';
+        sideEl.style.borderColor = '#d97706';
+        if (isSideA) yolkEl.style.background = '#fcd34d';
+      } else {
+        sideEl.style.background = '#3f1807';
+        sideEl.style.borderColor = '#18181b';
+        if (isSideA) yolkEl.style.background = '#78350f';
+      }
+    }
+
+    // --- 4. 游標與指標跟隨邏輯 ---
+    function updatePointerPos(e) {
+      mouseX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : mouseX);
+      mouseY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : mouseY);
+
+      // 當游標進入平底鍋區域時，顯現鏟子指示器
+      const panRect = pan.getBoundingClientRect();
+      const inPan = (
+        mouseX >= panRect.left - 20 &&
+        mouseX <= panRect.right + 20 &&
+        mouseY >= panRect.top - 20 &&
+        mouseY <= panRect.bottom + 20
+      );
+
+      if (inPan) {
+        spatulaCursor.style.opacity = '1';
+        const tilt = (mouseX - window.innerWidth / 2) * 0.03;
+        spatulaCursor.style.transform = `translate3d(${mouseX + 10}px, ${mouseY + 10}px, 0) rotate(${tilt}deg)`;
+      } else {
+        spatulaCursor.style.opacity = '0';
+      }
+
+      if (eggsList.length > 0 && !isTossingAll) {
+        checkSpatulaCollisions();
+      }
+    }
+
+    window.addEventListener('mousemove', updatePointerPos);
+    window.addEventListener('touchmove', updatePointerPos);
+
+    function checkSpatulaCollisions() {
+      eggsList.forEach(egg => {
+        const rect = egg.el.getBoundingClientRect();
+        const eggCenterX = rect.left + rect.width / 2;
+        const eggCenterY = rect.top + rect.height / 2;
+
+        const dist = Math.hypot(mouseX - eggCenterX, mouseY - eggCenterY);
+        if (dist < 65) {
+          const angle = Math.atan2(eggCenterY - mouseY, eggCenterX - mouseX);
+          const force = (65 - dist) * 1.5;
+
+          egg.vx += Math.cos(angle) * force;
+          egg.vy += Math.sin(angle) * force;
+
+          sound.playSpatulaClink();
+        }
+      });
+
+      for (let i = 0; i < eggsList.length; i++) {
+        for (let j = i + 1; j < eggsList.length; j++) {
+          const e1 = eggsList[i];
+          const e2 = eggsList[j];
+          const dx = e2.x - e1.x;
+          const dy = e2.y - e1.y;
+          const dist = Math.hypot(dx, dy);
+          if (dist < 65 && dist > 0) {
+            const overlap = 65 - dist;
+            const nx = dx / dist;
+            const ny = dy / dist;
+
+            e1.x -= nx * overlap * 0.5;
+            e1.y -= ny * overlap * 0.5;
+            e2.x += nx * overlap * 0.5;
+            e2.y += ny * overlap * 0.5;
+
+            e1.vx -= nx * 10;
+            e1.vy -= ny * 10;
+            e2.vx += nx * 10;
+            e2.vy += ny * 10;
+          }
+        }
+      }
+    }
+
+    // --- 5. 火力控制邏輯 ---
+    heatLowBtn.addEventListener('click', () => setHeatMode('LOW'));
+    heatMedBtn.addEventListener('click', () => setHeatMode('MED'));
+    heatHighBtn.addEventListener('click', () => setHeatMode('HIGH'));
+
+    function setHeatMode(mode) {
+      heatLowBtn.className = 'heat-btn px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-600';
+      heatMedBtn.className = 'heat-btn px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-600';
+      heatHighBtn.className = 'heat-btn px-3 py-1.5 rounded-xl text-xs font-bold transition bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-600';
+
+      const particles = flameContainer.querySelectorAll('.flame-particle');
+
+      if (mode === 'LOW') {
+        heatMultiplier = 0.5;
+        heatLowBtn.className = 'heat-btn px-3 py-1.5 rounded-xl text-xs font-bold transition bg-blue-600 text-white border border-blue-300 shadow';
+        particles.forEach(p => p.className = 'flame-particle flame-low');
+      } else if (mode === 'MED') {
+        heatMultiplier = 1.0;
+        heatMedBtn.className = 'heat-btn px-3 py-1.5 rounded-xl text-xs font-bold transition bg-amber-600 text-amber-950 border border-amber-300 shadow';
+        particles.forEach(p => p.className = 'flame-particle flame-med');
+      } else if (mode === 'HIGH') {
+        heatMultiplier = 2.5;
+        heatHighBtn.className = 'heat-btn px-3 py-1.5 rounded-xl text-xs font-bold transition bg-red-600 text-white border border-red-300 shadow';
+        particles.forEach(p => p.className = 'flame-particle flame-high');
+      }
+    }
+
+    // --- 6. 按鈕事件與互動 ---
+    crackBtn.addEventListener('click', crackEgg);
+    tossBtn.addEventListener('click', panTossAll);
+    serveBtn.addEventListener('click', serveClosestEgg);
+    resetBtn.addEventListener('click', resetGame);
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        panTossAll();
+      }
+    });
+
+    audioBtn.addEventListener('click', () => {
+      sound.muted = !sound.muted;
+      audioIcon.className = sound.muted ? 'fas fa-volume-mute' : 'fas fa-volume-up';
+      if (sound.muted) sound.stopSizzle();
+      else if (eggsList.length > 0) sound.startSizzle();
+    });
+
+    function crackEgg() {
+      if (eggsList.length >= MAX_EGGS) {
+        showResultBanner('⚠️ 鍋子已經塞滿 5 顆蛋囉！快先起鍋吧！', 'bg-amber-900/90 text-amber-200 border-amber-500');
+        return;
+      }
+
+      const spawnAngle = Math.random() * Math.PI * 2;
+      const spawnDist = Math.random() * 45;
+      const x = Math.cos(spawnAngle) * spawnDist;
+      const y = Math.sin(spawnAngle) * spawnDist;
+
+      const egg = new Egg(nextEggId++, x, y);
+      eggsList.push(egg);
+
+      sound.playCrack();
+      sound.startSizzle();
+
+      updateEggCountDisplay();
+      panPlaceholder.classList.add('hidden');
+      flameContainer.classList.remove('opacity-0');
+
+      tossBtn.disabled = false;
+      tossBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+      serveBtn.disabled = false;
+      serveBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+
+      if (eggsList.length === 1 && !lastTime) {
+        lastTime = performance.now();
+        requestAnimationFrame(gameLoop);
+        particleInterval = setInterval(createParticles, 160);
+      }
+    }
+
+    function gameLoop(timestamp) {
+      if (eggsList.length === 0) {
+        lastTime = 0;
+        return;
+      }
+
+      const dt = (timestamp - lastTime) / 1000;
+      lastTime = timestamp;
+
+      eggsList.forEach(egg => egg.update(dt));
+
+      requestAnimationFrame(gameLoop);
+    }
+
+    function panTossAll() {
+      if (eggsList.length === 0 || isTossingAll) return;
+
+      isTossingAll = true;
+      sound.playPanTossSound();
+
+      pan.classList.add('pan-tossing');
+      eggsList.forEach(egg => egg.tossInAir());
+
+      setTimeout(() => {
+        pan.classList.remove('pan-tossing');
+        isTossingAll = false;
+        sound.playSpatulaClink();
+      }, 500);
+    }
+
+    function serveClosestEgg() {
+      if (eggsList.length === 0) return;
+
+      let closestEgg = null;
+      let minDist = Infinity;
+
+      eggsList.forEach(egg => {
+        const rect = egg.el.getBoundingClientRect();
+        const eggCenterX = rect.left + rect.width / 2;
+        const eggCenterY = rect.top + rect.height / 2;
+        const dist = Math.hypot(mouseX - eggCenterX, mouseY - eggCenterY);
+
+        if (dist < minDist) {
+          minDist = dist;
+          closestEgg = egg;
+        }
+      });
+
+      if (!closestEgg || minDist > 160) {
+        closestEgg = eggsList[0];
+      }
+
+      evaluateEgg(closestEgg);
+    }
+
+    function evaluateEgg(egg) {
+      const hA = egg.heatA;
+      const hB = egg.heatB;
+
+      const isAPerfect = hA >= HEAT_PERFECT_MIN && hA <= HEAT_PERFECT_MAX;
+      const isBPerfect = hB >= HEAT_PERFECT_MIN && hB <= HEAT_PERFECT_MAX;
+      const isABurnt = hA > HEAT_WELL_DONE;
+      const isBBurnt = hB > HEAT_WELL_DONE;
+
+      let earnedPoints = 0;
+      let resultMsg = '';
+      let resultClass = '';
+      let eggIconType = '';
+
+      if (isAPerfect && isBPerfect) {
+        perfectCount++;
+        combo++;
+        earnedPoints = 200 + (combo - 1) * 30;
+        resultMsg = `🌟 特級廚師！雙面完美金黃！(+${earnedPoints}分 ${combo > 1 ? 'Combo x'+combo : ''})`;
+        resultClass = 'bg-emerald-800/95 text-emerald-100 border-emerald-400';
+        eggIconType = '特級金黃';
+        sound.playFanfare(true);
+        triggerConfetti();
+      } 
+      else if (!isABurnt && !isBBurnt && (isAPerfect || isBPerfect)) {
+        earnedPoints = 120;
+        combo = 0;
+        resultMsg = '🍳 美味荷包蛋！單面完美金黃！(+120分)';
+        resultClass = 'bg-amber-800/90 text-amber-100 border-amber-400';
+        eggIconType = '美味荷包蛋';
+        sound.playFanfare(false);
+      } 
+      else if (isABurnt || isBBurnt) {
+        earnedPoints = -50;
+        combo = 0;
+        const burntSideText = (isABurnt && isBBurnt) ? '雙面燒焦' : (isABurnt ? 'A面燒焦' : 'B面燒焦');
+        resultMsg = `💀 慘了！${burntSideText}！(-50分扣分)`;
+        resultClass = 'bg-red-950/95 text-red-200 border-red-600';
+        eggIconType = '黑炭';
+        sound.playBurnSound();
+      } 
+      else {
+        earnedPoints = 40;
+        combo = 0;
+        resultMsg = '💧 還太生了！蛋白還沒凝固呢 (+40分)';
+        resultClass = 'bg-blue-900/90 text-blue-200 border-blue-500';
+        eggIconType = '生蛋';
+        sound.playFanfare(false);
+      }
+
+      score = Math.max(0, score + earnedPoints);
+      scoreDisplay.innerText = score;
+      perfectCountDisplay.innerText = perfectCount;
+      comboDisplay.innerText = `x${combo}`;
+
+      if (score > highScore) {
+        highScore = score;
+        localStorage.setItem('egg_multimaster_highscore', highScore);
+        highScoreDisplay.innerText = `最高分: ${highScore}`;
+      }
+
+      showResultBanner(resultMsg, resultClass);
+      addEggToPlateTray(eggIconType, hA, hB);
+
+      egg.destroy();
+      eggsList = eggsList.filter(e => e.id !== egg.id);
+
+      updateEggCountDisplay();
+
+      if (eggsList.length === 0) {
+        sound.stopSizzle();
+        clearInterval(particleInterval);
+        flameContainer.classList.add('opacity-0');
+        panPlaceholder.classList.remove('hidden');
+
+        tossBtn.disabled = true;
+        tossBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+        serveBtn.disabled = true;
+        serveBtn.classList.add('opacity-50', 'cursor-not-allowed');
+      }
+    }
+
+    function createParticles() {
+      if (eggsList.length === 0) return;
+
+      eggsList.forEach(egg => {
+        const p = document.createElement('div');
+        const isOverheated = egg.heatA > HEAT_WELL_DONE || egg.heatB > HEAT_WELL_DONE;
+
+        if (isOverheated) {
+          p.className = 'smoke-particle';
+          const size = Math.random() * 20 + 14;
+          p.style.width = `${size}px`;
+          p.style.height = `${size}px`;
+          p.style.left = `${pan.getBoundingClientRect().width / 2 + egg.x - 10}px`;
+          p.style.top = `${pan.getBoundingClientRect().height / 2 + egg.y - 10}px`;
+          particleContainer.appendChild(p);
+        } else {
+          p.className = 'sizzle-bubble';
+          const size = Math.random() * 7 + 4;
+          p.style.width = `${size}px`;
+          p.style.height = `${size}px`;
+          p.style.left = `${pan.getBoundingClientRect().width / 2 + egg.x + (Math.random() - 0.5) * 40}px`;
+          p.style.top = `${pan.getBoundingClientRect().height / 2 + egg.y + (Math.random() - 0.5) * 40}px`;
+          particleContainer.appendChild(p);
+        }
+
+        setTimeout(() => p.remove(), 1100);
+      });
+    }
+
+    function updateEggCountDisplay() {
+      eggCountDisplay.innerText = `${eggsList.length} / ${MAX_EGGS}`;
+    }
+
+    function showResultBanner(msg, cssClass) {
+      resultText.innerText = msg;
+      resultText.className = `px-5 py-1 rounded-xl text-xs sm:text-sm font-black shadow-lg border ${cssClass}`;
+      resultBanner.classList.remove('opacity-0', 'translate-y-2');
+      resultBanner.classList.add('opacity-100', 'translate-y-0');
+    }
+
+    function addEggToPlateTray(type, hA, hB) {
+      if (emptyPlateHint) emptyPlateHint.style.display = 'none';
+
+      const item = document.createElement('div');
+      item.className = 'flex-shrink-0 bg-amber-950/80 border border-amber-700/60 rounded-xl px-2.5 py-1 flex items-center gap-2 shadow';
+
+      let bgDot = '#f59e0b';
+      if (type === '特級金黃') bgDot = '#10b981';
+      if (type === '黑炭') bgDot = '#ef4444';
+      if (type === '生蛋') bgDot = '#3b82f6';
+
+      item.innerHTML = `
+        <div class="w-3 h-3 rounded-full" style="background-color: ${bgDot}"></div>
+        <div class="text-xs">
+          <div class="font-bold text-amber-200 text-[11px]">${type}</div>
+          <div class="text-[9px] text-amber-400/80">A:${Math.floor(hA)}% | B:${Math.floor(hB)}%</div>
+        </div>
+      `;
+
+      eggPlateTray.prepend(item);
+    }
+
+    function triggerConfetti() {
+      if (typeof confetti === 'function') {
+        confetti({
+          particleCount: 65,
+          spread: 65,
+          origin: { y: 0.6 }
+        });
+      }
+    }
+
+    function resetGame() {
+      eggsList.forEach(egg => egg.destroy());
+      eggsList = [];
+
+      clearInterval(particleInterval);
+      sound.stopSizzle();
+
+      score = 0;
+      perfectCount = 0;
+      combo = 0;
+
+      scoreDisplay.innerText = '0';
+      perfectCountDisplay.innerText = '0';
+      comboDisplay.innerText = 'x0';
+      updateEggCountDisplay();
+
+      panPlaceholder.classList.remove('hidden');
+      flameContainer.classList.add('opacity-0');
+      resultBanner.classList.add('opacity-0');
+
+      tossBtn.disabled = true;
+      tossBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+      serveBtn.disabled = true;
+      serveBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+      eggPlateTray.innerHTML = '<span id="emptyPlateHint" class="text-xs text-amber-600 italic mx-auto">還沒有起鍋的荷包蛋喔，快打幾顆蛋試試！</span>';
+    }
+  </script>
+</body>
+</html>
